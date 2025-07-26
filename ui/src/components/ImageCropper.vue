@@ -1,26 +1,44 @@
 <template>
-  <div>
-    <input type="file" accept="image/*" @change="onFileChange" class="mb-2" />
 
-    <div v-if="imageUrl" class="relative inline-block border p-2" style="width: 100%; max-width: 600px; height: 400px;">
+  <div>
+    <!-- 📥 Drag-and-Drop Zone -->
+    <div
+      class="border-2 border-dashed border-gray-400 p-6 rounded text-center cursor-pointer transition hover:border-blue-500"
+      @dragover.prevent
+      @dragenter.prevent="isDragging = true"
+      @dragleave.prevent="isDragging = false"
+      @drop.prevent="handleDrop"
+      @click="triggerFileInput"
+      :class="{ 'bg-blue-50': isDragging }"
+    >
+      <p class="text-gray-600">
+        Drag & drop an image here, or <span class="underline text-blue-600">click to select</span>
+      </p>
+      <input
+        ref="fileInput"
+        type="file"
+        accept="image/*"
+        class="hidden"
+        @change="onFileChange"
+      />
+    </div>
+
+    <!-- 🖼️ Preview + Cropper -->
+    <div v-if="imageUrl" class="mt-4 border p-2" style="width: 100%; max-height: 400px;">
       <img
         ref="imageElement"
         :src="imageUrl"
-        class="max-w-full max-h-[300px]"
+        class="max-h-[300px]"
         :style="rotationStyle"
       />
     </div>
 
+    <!-- 🧰 Controls -->
     <div v-if="cropper" class="mt-4 flex flex-wrap gap-2">
       <button @click="rotateLeft" class="px-4 py-1 bg-blue-600 text-white rounded">Rotate Left</button>
       <button @click="rotateRight" class="px-4 py-1 bg-blue-600 text-white rounded">Rotate Right</button>
       <button @click="cropImage" class="px-4 py-1 bg-green-600 text-white rounded">Crop</button>
       <button @click="resetImage" class="px-4 py-1 bg-red-600 text-white rounded">Reset</button>
-    </div>
-
-    <div v-if="croppedImage" class="mt-4">
-      <h3 class="font-bold">Cropped Image:</h3>
-      <img :src="croppedImage" class="border mt-2 max-w-full" style="width: 100%; max-width: 300px;"/>
     </div>
   </div>
 </template>
@@ -30,27 +48,24 @@ import { ref, computed, watch, nextTick } from 'vue'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 
+const emit = defineEmits(['cropped'])
+
 const imageUrl = ref(null)
-const croppedImage = ref(null)
 const cropper = ref(null)
 const imageElement = ref(null)
+const fileInput = ref(null)
 const rotation = ref(0)
+const isDragging = ref(false)
 
-// computed style for image rotation
-const rotationStyle = computed(() => {
-  return {
-    transform: `rotate(${rotation.value}deg)`,
-    transition: 'transform 0.3s ease',
-  }
-})
+const rotationStyle = computed(() => ({
+  transform: `rotate(${rotation.value}deg)`,
+  transition: 'transform 0.3s ease',
+}))
 
-// Watch for image load and initialize cropper
 watch(imageUrl, () => {
   nextTick(() => {
     if (imageElement.value) {
-      if (cropper.value) {
-        cropper.value.destroy()
-      }
+      if (cropper.value) cropper.value.destroy()
       cropper.value = new Cropper(imageElement.value, {
         viewMode: 1,
         autoCropArea: 1,
@@ -60,14 +75,27 @@ watch(imageUrl, () => {
   })
 })
 
+function triggerFileInput() {
+  fileInput.value?.click()
+}
+
 function onFileChange(e) {
   const file = e.target.files[0]
-  if (!file) return
+  if (file) loadImage(file)
+}
+
+function handleDrop(e) {
+  isDragging.value = false
+  const file = e.dataTransfer.files[0]
+  if (file) loadImage(file)
+}
+
+function loadImage(file) {
   const reader = new FileReader()
   reader.onload = () => {
     imageUrl.value = reader.result
-    croppedImage.value = null
     rotation.value = 0
+    emit('cropped', null)
   }
   reader.readAsDataURL(file)
 }
@@ -75,27 +103,15 @@ function onFileChange(e) {
 function cropImage() {
   if (!cropper.value) return
   const canvas = cropper.value.getCroppedCanvas()
-  croppedImage.value = canvas.toDataURL('image/png')
+  const croppedData = canvas.toDataURL('image/png')
+  emit('cropped', croppedData)
 }
-
-// function resetImage() {
-//   try {
-//     if (cropper.value) {
-//       cropper.value.clear()    // clears the crop box
-//       cropper.value.crop()     // reactivates default crop box
-//     }
-//   } catch (error) {
-//     console.error('Error resetting cropper:', error)
-//   }
-// }
 
 function resetImage() {
   if (cropper.value) {
-    cropper.value.reset() // Resets the cropper to its initial state
-    croppedImage.value = null // Clear the cropped image
-    rotation.value = 0 // Reset rotation
-    // imageUrl.value = null // Clear the image URL
-    // imageElement.value.src = '' // Clear the image element source  
+    cropper.value.reset()
+    rotation.value = 0
+    emit('cropped', null)
   }
 }
 
@@ -108,14 +124,10 @@ function rotateRight() {
   rotation.value += 90
   cropper.value.rotate(1.5)
 }
-// function rotateLeft() {
-//   rotation.value = (rotation.value - 90) % 360
-//   cropper.value.rotateTo(rotation.value)
-// }
-
-// function rotateRight() {
-//   rotation.value = (rotation.value + 90) % 360
-//   cropper.value.rotateTo(rotation.value)
-// }
-
 </script>
+<style>
+    .cropper-container {
+      width: 100% !important;
+      max-width: 100%;
+    }
+  </style>
