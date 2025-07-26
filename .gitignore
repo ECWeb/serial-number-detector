@@ -1,0 +1,6 @@
+# Ignore Python bytecode and cache folders
+__pycache__/
+*.pyc
+
+# Ignore model output folders
+backend/weights/runs/
